@@ -9,6 +9,7 @@ import (
 	"encoding/csv"
 	"os"
 	"strconv"
+	"strings"
 )
 
 func main(){
@@ -21,7 +22,7 @@ func main(){
 // }
 
 
-data, err := readCSVFile("../../Downloads/laf_297078_11_10_2024.csv")
+data, err := readCSVFile("../../Downloads/laf_297078_15_10_2024 (1).csv")
 if err != nil {
 	fmt.Println("Error reading file:", err)
 	return
@@ -34,21 +35,24 @@ if err != nil {
 canData,_ := processCSV(reader);
 
 // fmt.Println(canData)
+timestamp:=GetTimestamp(canData);
+
 for key,_ := range canData{
 	pidmap := getMappingbits(key,Data)
-	processData(key,canData[key],pidmap)
-	fmt.Println(key,canData[key],pidmap)
-	break
+	processData(key,canData[key],pidmap,timestamp)
+	// fmt.Println(key,"===",Data.Status)
+	// fmt.Println(key,canData[key],pidmap)
+	// break
 	
 }
 
 }
-func getMappingbits(pid string,Data pidMapping) []pidData {
+func getMappingbits(pidcode string,Data pidMapping) []pidData {
 pidMapArr :=[]pidData{}
 
 for _, value := range Data.Data {
 	id := strconv.Itoa(value.PidCode) // PidCode to string
-	if pid == id {
+	if pidcode == id {
 		pidMapArr = append(pidMapArr, value)
 	}
 }
@@ -56,14 +60,117 @@ for _, value := range Data.Data {
 return pidMapArr
 }
 
-func processData(pidId string,canData []string,pidmap []pidData){
+func processData(pidIdCode string,canData []string,pidmap []pidData,timestamp []string){
+   
 
-fmt.Println(pidId,canData,pidmap)
+for _,pmap :=range pidmap{
+
+	for i,candata := range canData{
+		value:=getdecodeData(candata,pmap.ShiftBits,pmap.MaskBitsHex,pmap.Multiplier,pmap.Divisor,pmap.Offset,pmap.Endian)
+	fmt.Println(pidIdCode,pmap.Name,"=",value,timestamp[i])
+	}
+
 
 }
 
 
+}
 
+func GetTimestamp(canData map[string][]string)([]string){
+	
+	for key,_ := range canData{
+		if(key=="time"){
+	    return canData[key];
+		}
+		
+	}
+	return nil
+
+}
+
+func getdecodeData(canData string,shiftbits int,maskbitshex string,Multiplier int,Divisor int,Offset int,Endian int) float64 {
+    Data:=hexToBinary(canData)
+	arrcanData:=strings.Split(Data,"")
+	array:=strings.Split(maskbitshex,"")
+	var length int=0
+    for _,ch:=range array{
+		if(ch=="F"){
+			length++;
+		}
+	}
+	length=length*4
+	canval :=""
+	for i,canvalue :=range arrcanData {
+		if(i>=shiftbits){
+			if i==shiftbits+length{
+				break
+			}
+			canval+=canvalue
+			//   fmt.Println(shiftbits,"+",length,"=",shiftbits+length,canval,"->",Data)
+		}
+	}
+
+	if Endian==0 || Endian<0{
+		arrayofstr:=strings.Split(canval,"")
+		newbinarydata:=""
+		str:=""
+		for i,val:= range arrayofstr{
+			str=str+val
+			if (i+1)%8 == 0{
+				newbinarydata=str+newbinarydata
+				str=""
+			}
+		}
+		canval=newbinarydata	
+	}
+    //  0011 0000 0000 0010
+    value,_ :=strconv.ParseUint(canval, 2, 64);
+     
+	dta := float64(value) * (float64(Multiplier)/float64(Divisor)) + float64(Offset)
+	// fmt.Println(dta,"===",canval,int(value),Multiplier,Divisor,Offset,Data)
+	return dta
+
+}
+
+// func hexToBinary(hexStr string,endiness string) string {
+// 	decimalValue, _:= strconv.ParseUint(hexStr, 16, 64)
+	
+// 	binaryStr := fmt.Sprintf("%b", decimalValue)
+   
+//     for len(binaryStr)!=64{
+// 		binaryStr ="0"+binaryStr
+// 	}
+// 	if endiness=="Big endian"{
+// 		return binaryStr
+// 	}else if endiness=="Little endian"{
+// 		arrayofstr:=strings.Split(binaryStr,"")
+// 		newbinarydata:=""
+// 		str:=""
+// 		for _,val:= range arrayofstr{
+// 			str=str+val
+// 			if len(str)%8 == 0{
+// 				newbinarydata=str+newbinarydata
+// 				str=""
+// 			}
+// 		}
+// 		// fmt.Println(binaryStr,"=====",newbinarydata)
+// 		return newbinarydata
+// 	}else{
+// 		return ""
+// 	}
+// }
+
+func hexToBinary(hexStr string) string {
+	decimalValue, _:= strconv.ParseUint(hexStr, 16, 64)
+	
+	binaryStr := fmt.Sprintf("%b", decimalValue)
+   
+    for len(binaryStr)!=64{
+		binaryStr ="0"+binaryStr
+	}
+	return binaryStr
+	
+}
 
 
 
@@ -239,3 +346,4 @@ func processCSV(reader *csv.Reader) (map[string][]string,error) {
 	fmt.Println("---------------------")
 return pidvaluemap,nil
 }
+
